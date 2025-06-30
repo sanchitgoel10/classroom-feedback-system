@@ -146,7 +146,7 @@ const Teacher = () => {
 
   const loadExistingQuestions = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/debug/questions/${roomId}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/debug/questions/${roomId}`);
       const data = await response.json();
       console.log(`📊 Teacher loaded ${data.totalQuestions} existing questions for room ${roomId}`);
       setQuestions(data.questions || []);
@@ -188,7 +188,7 @@ const Teacher = () => {
       setQuestions([]);
       
       // Tell backend to clear this room's session
-      const response = await fetch(`http://localhost:5001/api/clear-session/${roomId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clear-session/${roomId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseName: courseName || `Room ${roomId}` })
