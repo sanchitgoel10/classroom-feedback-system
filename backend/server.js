@@ -161,6 +161,80 @@ class FreeAI {
   }
 }
 
+// Add this AFTER the existing FreeAI class
+const { HfInference } = require('@huggingface/inference');
+
+// Initialize Hugging Face (only if API key exists)
+const hf = process.env.HUGGINGFACE_API_KEY ? new HfInference(process.env.HUGGINGFACE_API_KEY) : null;
+
+class EnhancedAI {
+  // Smart categorization using LLM
+  static async categorizeQuestion(text) {
+    if (!hf) {
+      console.log('🤖 No HF API key, using fallback categorization');
+      return FreeAI.categorizeQuestion(text);
+    }
+
+    try {
+      console.log(`🤖 Analyzing question: "${text}"`);
+      
+      const result = await hf.zeroShotClassification({
+        model: 'facebook/bart-large-mnli',
+        inputs: text,
+        parameters: {
+          candidate_labels: [
+            'definition and explanation',
+            'process and procedures', 
+            'examples and cases',
+            'reasoning and why',
+            'clarification and confusion',
+            'general question'
+          ]
+        }
+      });
+      
+      // Extract the main category (first word)
+      const category = result.labels[0].toLowerCase().split(' ')[0];
+      const confidence = result.scores[0];
+      
+      console.log(`🎯 AI Result: ${category} (confidence: ${confidence.toFixed(2)})`);
+      return category;
+      
+    } catch (error) {
+      console.error('🚫 LLM categorization failed:', error.message);
+      return FreeAI.categorizeQuestion(text); // Fallback
+    }
+  }
+
+  // Smart sentiment analysis
+  static async analyzeSentiment(text) {
+    if (!hf) {
+      return 'neutral';
+    }
+
+    try {
+      const result = await hf.textClassification({
+        model: 'cardiffnlp/twitter-roberta-base-sentiment-latest',
+        inputs: text
+      });
+      
+      const sentiment = result[0].label.toLowerCase();
+      const confidence = result[0].score;
+      
+      console.log(`😊 Sentiment: ${sentiment} (${confidence.toFixed(2)})`);
+      
+      // Map to your categories
+      if (sentiment === 'negative' && confidence > 0.6) return 'confused';
+      if (sentiment === 'positive' && confidence > 0.7) return 'excited'; 
+      return 'neutral';
+      
+    } catch (error) {
+      console.error('🚫 Sentiment analysis failed:', error.message);
+      return 'neutral';
+    }
+  }
+}
+
 // Generate session codes
 function generateSessionCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -291,7 +365,12 @@ io.on('connection', (socket) => {
   
   try {
     const questionId = uuidv4();
-    const category = FreeAI.categorizeQuestion(questionText);
+    // const category = FreeAI.categorizeQuestion(questionText);
+
+    const category = await EnhancedAI.categorizeQuestion(questionText);
+    const analyzedSentiment = await EnhancedAI.analyzeSentiment(questionText);
+
+    console.log(`🤖 AI Results - Category: ${category}, Sentiment: ${analyzedSentiment}`);
     
     console.log(`🤖 AI categorized question as: ${category}`);
     
@@ -325,7 +404,7 @@ io.on('connection', (socket) => {
         // Save question to database
         db.run(
           'INSERT INTO questions (id, session_id, student_name, question_text, sentiment, topic_cluster) VALUES (?, ?, ?, ?, ?, ?)',
-          [questionId, sessionCode, studentName, questionText, sentiment, topicCluster],
+          [questionId, sessionCode, studentName, questionText, analyzedSentiment, topicCluster],
           function(err) {
             if (err) {
               console.error('❌ Error saving question to database:', err);
