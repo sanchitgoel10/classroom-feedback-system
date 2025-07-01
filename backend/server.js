@@ -355,6 +355,63 @@ app.post('/api/clear-session/:roomId', (req, res) => {
   });
 });
 
+// Add this AFTER your existing routes (around line 150)
+app.get('/api/test-models', async (req, res) => {
+  const results = {};
+  
+  if (!hf) {
+    return res.json({ error: 'No HF API key available' });
+  }
+  
+  // Test 1: Basic sentiment model
+  try {
+    console.log('🧪 Testing basic sentiment model...');
+    const sentiment1 = await hf.textClassification({
+      model: 'cardiffnlp/twitter-roberta-base-sentiment',
+      inputs: 'I love this classroom!'
+    });
+    results.sentiment_basic = { success: true, result: sentiment1 };
+    console.log('✅ Basic sentiment model works');
+  } catch (error) {
+    results.sentiment_basic = { success: false, error: error.message };
+    console.log('❌ Basic sentiment model failed:', error.message);
+  }
+  
+  // Test 2: Alternative sentiment model
+  try {
+    console.log('🧪 Testing alternative sentiment model...');
+    const sentiment2 = await hf.textClassification({
+      model: 'distilbert-base-uncased-finetuned-sst-2-english',
+      inputs: 'I love this classroom!'
+    });
+    results.sentiment_alt = { success: true, result: sentiment2 };
+    console.log('✅ Alternative sentiment model works');
+  } catch (error) {
+    results.sentiment_alt = { success: false, error: error.message };
+    console.log('❌ Alternative sentiment model failed:', error.message);
+  }
+  
+  // Test 3: Simple text classification for categories
+  try {
+    console.log('🧪 Testing simple classification...');
+    const classification = await hf.textClassification({
+      model: 'distilbert-base-uncased-finetuned-sst-2-english',
+      inputs: 'What does AI mean?'
+    });
+    results.classification = { success: true, result: classification };
+    console.log('✅ Simple classification works');
+  } catch (error) {
+    results.classification = { success: false, error: error.message };
+    console.log('❌ Simple classification failed:', error.message);
+  }
+  
+  res.json({
+    timestamp: new Date(),
+    huggingface_connected: true,
+    model_tests: results
+  });
+});
+
 // Socket.io Real-time Events
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
