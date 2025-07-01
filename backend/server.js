@@ -168,8 +168,16 @@ const { HfInference } = require('@huggingface/inference');
 const hf = process.env.HUGGINGFACE_API_KEY ? new HfInference(process.env.HUGGINGFACE_API_KEY) : null;
 
 class EnhancedAI {
-  // Smart categorization using LLM
+  // Smart categorization with kill switch
   static async categorizeQuestion(text) {
+    // Check if AI is enabled via environment variable
+    const AI_ENABLED = process.env.AI_ENABLED !== 'false';
+    
+    if (!AI_ENABLED) {
+      console.log('🤖 AI disabled via environment variable, using fallback');
+      return FreeAI.categorizeQuestion(text);
+    }
+    
     if (!hf) {
       console.log('🤖 No HF API key, using fallback categorization');
       return FreeAI.categorizeQuestion(text);
@@ -193,7 +201,6 @@ class EnhancedAI {
         }
       });
       
-      // Extract the main category (first word)
       const category = result.labels[0].toLowerCase().split(' ')[0];
       const confidence = result.scores[0];
       
@@ -206,10 +213,13 @@ class EnhancedAI {
     }
   }
 
-  // Smart sentiment analysis
+  // Smart sentiment analysis with kill switch
   static async analyzeSentiment(text) {
-    if (!hf) {
-      return 'neutral';
+    // Check if AI is enabled
+    const AI_ENABLED = process.env.AI_ENABLED !== 'false';
+    
+    if (!AI_ENABLED || !hf) {
+      return 'neutral'; // Simple fallback
     }
 
     try {
@@ -223,7 +233,6 @@ class EnhancedAI {
       
       console.log(`😊 Sentiment: ${sentiment} (${confidence.toFixed(2)})`);
       
-      // Map to your categories
       if (sentiment === 'negative' && confidence > 0.6) return 'confused';
       if (sentiment === 'positive' && confidence > 0.7) return 'excited'; 
       return 'neutral';
