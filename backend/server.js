@@ -168,63 +168,47 @@ const { HfInference } = require('@huggingface/inference');
 const hf = process.env.HUGGINGFACE_API_KEY ? new HfInference(process.env.HUGGINGFACE_API_KEY) : null;
 
 class EnhancedAI {
-  // Smart categorization with kill switch
+  // Smart categorization using working sentiment + rules
   static async categorizeQuestion(text) {
-    // Check if AI is enabled via environment variable
     const AI_ENABLED = process.env.AI_ENABLED !== 'false';
     
-    if (!AI_ENABLED) {
-      console.log('🤖 AI disabled via environment variable, using fallback');
-      return FreeAI.categorizeQuestion(text);
-    }
-    
-    if (!hf) {
-      console.log('🤖 No HF API key, using fallback categorization');
+    if (!AI_ENABLED || !hf) {
+      console.log('🤖 AI disabled, using fallback categorization');
       return FreeAI.categorizeQuestion(text);
     }
 
     try {
       console.log(`🤖 Analyzing question: "${text}"`);
       
-      const result = await hf.zeroShotClassification({
-        model: 'facebook/bart-large-mnli',
-        inputs: text,
-        parameters: {
-          candidate_labels: [
-            'definition and explanation',
-            'process and procedures', 
-            'examples and cases',
-            'reasoning and why',
-            'clarification and confusion',
-            'general question'
-          ]
-        }
-      });
+      // Use simple rule-based approach enhanced with sentiment
+      const sentiment = await this.analyzeSentiment(text);
+      let category = FreeAI.categorizeQuestion(text); // Use our existing rules as base
       
-      const category = result.labels[0].toLowerCase().split(' ')[0];
-      const confidence = result.scores[0];
+      // Enhance with sentiment context
+      if (sentiment === 'confused' && category === 'general') {
+        category = 'clarification';
+      }
       
-      console.log(`🎯 AI Result: ${category} (confidence: ${confidence.toFixed(2)})`);
+      console.log(`🎯 AI Result: ${category} (enhanced with sentiment: ${sentiment})`);
       return category;
       
     } catch (error) {
-      console.error('🚫 LLM categorization failed:', error.message);
-      return FreeAI.categorizeQuestion(text); // Fallback
+      console.error('🚫 Enhanced categorization failed:', error.message);
+      return FreeAI.categorizeQuestion(text);
     }
   }
 
-  // Smart sentiment analysis with kill switch
+  // Smart sentiment analysis using WORKING model
   static async analyzeSentiment(text) {
-    // Check if AI is enabled
     const AI_ENABLED = process.env.AI_ENABLED !== 'false';
     
     if (!AI_ENABLED || !hf) {
-      return 'neutral'; // Simple fallback
+      return 'neutral';
     }
 
     try {
       const result = await hf.textClassification({
-        model: 'cardiffnlp/twitter-roberta-base-sentiment-latest',
+        model: 'distilbert-base-uncased-finetuned-sst-2-english', // WORKING MODEL
         inputs: text
       });
       
@@ -233,8 +217,9 @@ class EnhancedAI {
       
       console.log(`😊 Sentiment: ${sentiment} (${confidence.toFixed(2)})`);
       
-      if (sentiment === 'negative' && confidence > 0.6) return 'confused';
-      if (sentiment === 'positive' && confidence > 0.7) return 'excited'; 
+      // Map to your categories
+      if (sentiment === 'negative' && confidence > 0.7) return 'confused';
+      if (sentiment === 'positive' && confidence > 0.8) return 'excited'; 
       return 'neutral';
       
     } catch (error) {
